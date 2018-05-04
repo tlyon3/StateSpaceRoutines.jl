@@ -4,7 +4,6 @@ and written by Iskander Karibzhanov.
 =#
 
 mutable struct Kalman_Out
-    log_likelihood  ::Float64
     z               ::Array{Float64, 1}
     P               ::Array{Float64, 2}
     pred            ::Array{Float64, 2}
@@ -18,10 +17,12 @@ mutable struct Kalman_Out
     marginal_loglh  ::Array{Float64, 1}
 end
 
+# TODO: Add methods to compute log_likelihood, rmse, and rmsd
+
 # These can all be computed from other values
 # rmse            ::Array{Float64, 2}
 # rmsd            ::Array{Float64, 2}
-# marginal_loglh  ::Array{Float64, 1}
+# log_likelihood  ::Float64
 
 # log_likelihood = sum(marginal_loglh)
 #
@@ -241,7 +242,6 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
     # marginal_logtlh = zeros(T)
     if allout
         kf = Kalman_Out(
-            0.0,                    #log_likelihood
             z0,                     #z
             P0,                     #P
             zeros(S, Nz, T),        #pred
@@ -256,7 +256,6 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
         )
     else
         kf = Kalman_Out(
-            0.0,                        # log_likelihood
             z0,                         # z
             P0,                         # P
             Array{Float64}(0, 0),       # pred
