@@ -3,22 +3,6 @@ This code is loosely based on a routine originally copyright Federal Reserve Ban
 and written by Iskander Karibzhanov.
 =#
 
-struct Kalman_Out
-    log_likelihood  ::Float64
-    z               ::Array{Float64, 1}
-    P               ::Array{Float64, 2}
-    pred            ::Array{Float64, 2}
-    vpred           ::Array{Float64, 3}
-    filt            ::Array{Float64, 2}
-    vfilt           ::Array{Float64, 3}
-    yprederror      ::Array{Float64, 2}
-    ystdprederror   ::Array{Float64, 2}
-    rmse            ::Array{Float64, 2}
-    rmsd            ::Array{Float64, 2}
-    z0              ::Array{Float64, 1}
-    P0              ::Array{Float64, 2}
-    marginal_loglh  ::Array{Float64, 1}
-end
 """
 ```
 kalman_filter(data, TTT, RRR, CCC, QQ, ZZ, DD, EE, z0 = Vector(), P0 = Matrix();
@@ -321,7 +305,6 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
     rmse = sqrt.(mean((yprederror.^2), 2))'
     rmsd = sqrt.(mean((ystdprederror.^2), 2))'
 
-    log_likelihood = log_likelihood
     return log_likelihood, z, P, pred, vpred, filt, vfilt, yprederror, ystdprederror,
     rmse, rmsd, z0, P0, marginal_loglh
     # else
