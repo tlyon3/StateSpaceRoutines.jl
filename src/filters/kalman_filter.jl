@@ -3,7 +3,7 @@ This code is loosely based on a routine originally copyright Federal Reserve Ban
 and written by Iskander Karibzhanov.
 =#
 
-struct Kalman_Out
+mutable struct Kalman_Out
     log_likelihood  ::Float64
     z               ::Array{Float64, 1}
     P               ::Array{Float64, 2}
@@ -14,8 +14,8 @@ struct Kalman_Out
     yprederror      ::Array{Float64, 2}
     ystdprederror   ::Array{Float64, 2}
     z0              ::Array{Float64, 1}
-    P0              ::Array{Float64, 2},
-    marginal_loglh  ::????
+    P0              ::Array{Float64, 2}
+    marginal_loglh  ::Array{Float64, 1}
 end
 
 # These can all be computed from other values
@@ -238,36 +238,36 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
     end
 
     # Initialize outputs
-    marginal_loglh = zeros(T)
+    # marginal_logtlh = zeros(T)
     if allout
         kf = Kalman_Out(
-            log_likelihood      = 0.0
-            z                   = z0,
-            P                   = P0,
-            pred                = zeros(S, Nz, T),
-            vpred               = zeros(S, Nz, Nz, T),
-            filt                = zeros(S, Nz, T),
-            vfilt               = zeros(S, Nz, Nz, T),
-            yprederror          = NaN*zeros(S, Ny, T),
-            ystdprederror       = NaN*zeros(S, Ny, T),
-            z0                  = z0,
-            P0                  = P0,
-            marginal_loglh      = ???
+            0.0,                    #log_likelihood
+            z0,                     #z
+            P0,                     #P
+            zeros(S, Nz, T),        #pred
+            zeros(S, Nz, Nz, T),    #vpred
+            zeros(S, Nz, T),        #filt
+            zeros(S, Nz, Nz, T),    #vfilt
+            NaN*zeros(S, Ny, T),    #yprederror
+            NaN*zeros(S, Ny, T),    #ystdprederror
+            z0,                     #z0
+            P0,                     #P0
+            zeros(T)                #marginal_loglh
         )
     else
         kf = Kalman_Out(
-            log_likelihood      = 0.0
-            z                   = z0,
-            P                   = P0,
-            pred                = Array{Float64}(0, 0),
-            vpred               = Array{Float64}(0, 0, 0),
-            filt                = Array{Float64}(0, 0),
-            vfilt               = Array{Float64}(0, 0, 0),
-            yprederror          = Array{Float64}(0, 0),
-            ystdprederror       = Array{Float64}(0, 0),
-            z0                  = z0,
-            P0                  = P0,
-            marginal_loglh      = ???
+            0.0,                        # log_likelihood
+            z0,                         # z
+            P0,                         # P
+            Array{Float64}(0, 0),       # pred
+            Array{Float64}(0, 0, 0),    # vpred
+            Array{Float64}(0, 0),       # filt
+            Array{Float64}(0, 0, 0),    # vfilt
+            Array{Float64}(0, 0),       # yprederror
+            Array{Float64}(0, 0),       # ystdprederror
+            z0,                         # z0
+            P0,                         # P0
+            zeros(T)                    # marginal_loglh
         )
     end
 
@@ -297,12 +297,12 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
         V = ZZ_t*kf.P*ZZ_t' + EE_t         # V_{t|t-1} = Var y_{t|t-1} = ZZ*P_{t|t-1}*ZZ' + EE
         V = (V+V')/2
 
-        dy = y_t - ZZ_t*z - DD_t        # dy  = y_t - y_{t|t-1} = prediction error
+        dy = y_t - ZZ_t*kf.z - DD_t        # dy  = y_t - y_{t|t-1} = prediction error
         ddy = V\dy                      # ddy = (1/V_{t|t-1})dy = weighted prediction error
 
         if allout
-            kf.pred[:, t]                   = z
-            kf.vpred[:, :, t]               = P
+            kf.pred[:, t]                   = kf.z
+            kf.vpred[:, :, t]               = kf.P
             kf.yprederror[nonmissing, t]    = dy
             kf.ystdprederror[nonmissing, t] .= dy ./ sqrt.(diag(V))
         end
