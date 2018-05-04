@@ -3,6 +3,33 @@ This code is loosely based on a routine originally copyright Federal Reserve Ban
 and written by Iskander Karibzhanov.
 =#
 
+struct Kalman_Out
+    log_likelihood  ::Float64
+    z               ::Array{Float64, 1}
+    P               ::Array{Float64, 2}
+    pred            ::Array{Float64, 2}
+    vpred           ::Array{Float64, 3}
+    filt            ::Array{Float64, 2}
+    vfilt           ::Array{Float64, 3}
+    yprederror      ::Array{Float64, 2}
+    ystdprederror   ::Array{Float64, 2}
+    z0              ::Array{Float64, 1}
+    P0              ::Array{Float64, 2},
+    marginal_loglh  ::????
+end
+
+# These can all be computed from other values
+# rmse            ::Array{Float64, 2}
+# rmsd            ::Array{Float64, 2}
+# marginal_loglh  ::Array{Float64, 1}
+
+# log_likelihood = sum(marginal_loglh)
+#
+# # if allout
+# rmse = sqrt.(mean((yprederror.^2), 2))'
+# rmsd = sqrt.(mean((ystdprederror.^2), 2))'
+
+
 """
 ```
 kalman_filter(data, TTT, RRR, CCC, QQ, ZZ, DD, EE, z0 = Vector(), P0 = Matrix();
@@ -210,19 +237,39 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
         end
     end
 
-    z = z0
-    P = P0
-
     # Initialize outputs
     marginal_loglh = zeros(T)
-    # if allout
-    pred                = zeros(S, Nz, T)
-    vpred               = zeros(S, Nz, Nz, T)
-    filt                = zeros(S, Nz, T)
-    vfilt               = zeros(S, Nz, Nz, T)
-    yprederror          = NaN*zeros(S, Ny, T)
-    ystdprederror       = NaN*zeros(S, Ny, T)
-    # end
+    if allout
+        kf = Kalman_Out(
+            log_likelihood      = 0.0
+            z                   = z0,
+            P                   = P0,
+            pred                = zeros(S, Nz, T),
+            vpred               = zeros(S, Nz, Nz, T),
+            filt                = zeros(S, Nz, T),
+            vfilt               = zeros(S, Nz, Nz, T),
+            yprederror          = NaN*zeros(S, Ny, T),
+            ystdprederror       = NaN*zeros(S, Ny, T),
+            z0                  = z0,
+            P0                  = P0,
+            marginal_loglh      = ???
+        )
+    else
+        kf = Kalman_Out(
+            log_likelihood      = 0.0
+            z                   = z0,
+            P                   = P0,
+            pred                = Array{Float64}(0, 0),
+            vpred               = Array{Float64}(0, 0, 0),
+            filt                = Array{Float64}(0, 0),
+            vfilt               = Array{Float64}(0, 0, 0),
+            yprederror          = Array{Float64}(0, 0),
+            ystdprederror       = Array{Float64}(0, 0),
+            z0                  = z0,
+            P0                  = P0,
+            marginal_loglh      = ???
+        )
+    end
 
     V = RRR*QQ*RRR' # V = Var(z_t) = Var(Rϵ_t)
     V_0 = copy(V)
@@ -245,69 +292,59 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
         Ny_t = length(y_t)
 
         ## Forecast
-        z = TTT*z + CCC                 # z_{t|t-1} = TTT*z_{t-1|t-1} + CCC
-        P = TTT*P*TTT' + V_0            # P_{t|t-1} = Var s_{t|t-1} = TTT*P_{t-1|t-1}*TTT' + RRR*QQ*RRR'
-        V = ZZ_t*P*ZZ_t' + EE_t         # V_{t|t-1} = Var y_{t|t-1} = ZZ*P_{t|t-1}*ZZ' + EE
+        kf.z = TTT*kf.z + CCC                 # z_{t|t-1} = TTT*z_{t-1|t-1} + CCC
+        kf.P = TTT*kf.P*TTT' + V_0            # P_{t|t-1} = Var s_{t|t-1} = TTT*P_{t-1|t-1}*TTT' + RRR*QQ*RRR'
+        V = ZZ_t*kf.P*ZZ_t' + EE_t         # V_{t|t-1} = Var y_{t|t-1} = ZZ*P_{t|t-1}*ZZ' + EE
         V = (V+V')/2
 
         dy = y_t - ZZ_t*z - DD_t        # dy  = y_t - y_{t|t-1} = prediction error
         ddy = V\dy                      # ddy = (1/V_{t|t-1})dy = weighted prediction error
 
-        # if allout
-        pred[:, t]                   = z
-        vpred[:, :, t]               = P
-        yprederror[nonmissing, t]    = dy
-        ystdprederror[nonmissing, t] .= dy ./ sqrt.(diag(V))
-        # end
+        if allout
+            kf.pred[:, t]                   = z
+            kf.vpred[:, :, t]               = P
+            kf.yprederror[nonmissing, t]    = dy
+            kf.ystdprederror[nonmissing, t] .= dy ./ sqrt.(diag(V))
+        end
 
         ## Compute marginal log-likelihood, log P(y_t|y_1,...y_{t-1},θ)
         ## log P(y_1,...,y_T|θ) ∝ log P(y_1|θ) + log P(y_2|y_1,θ) + ... + P(y_T|y_1,...,y_{T-1},θ)
         if t > n_presample_periods
-            marginal_loglh[t] = -log(det(V))/2 - first(dy'*ddy/2) - Ny_t*log(2*pi)/2
+            kf.marginal_loglh[t] = -log(det(V))/2 - first(dy'*ddy/2) - Ny_t*log(2*pi)/2
         end
 
-        gain = P'*ZZ_t'
+        gain = kf.P'*ZZ_t'
         ## Update
-        z = z + gain*ddy            # z_{t|t} = z_{t|t-1} + P_{t|t-1}'*ZZ'*(1/V_{t|t-1})dy
-        P = P - gain/V*ZZ_t*P       # P_{t|t} = P_{t|t-1} - P_{t|t-1}'*ZZ'*(1/V_{t|t-1})*ZZ*P_{t|t-1}
+        kf.z = kf.z + gain*ddy            # z_{t|t} = z_{t|t-1} + P_{t|t-1}'*ZZ'*(1/V_{t|t-1})dy
+        kf.P = kf.P - gain/V*ZZ_t*kf.P       # P_{t|t} = P_{t|t-1} - P_{t|t-1}'*ZZ'*(1/V_{t|t-1})*ZZ*P_{t|t-1}
 
-        # if allout
-        filt[:, t]     = z
-        vfilt[:, :, t] = P
-        # end
+        if allout
+            kf.filt[:, t]     = kf.z
+            kf.vfilt[:, :, t] = kf.P
+        end
 
     end # of loop through periods
 
     if n_presample_periods > 0
         mainsample_periods = n_presample_periods+1:T
 
-        marginal_loglh = marginal_loglh[mainsample_periods]
+        kf.marginal_loglh = kf.marginal_loglh[mainsample_periods]
 
-        # if allout
-        # If we choose to discard presample periods, then we reassign `z0`
-        # and `P0` to be their values at the end of the presample/beginning
-        # of the main sample
-        z0 = filt[:,     n_presample_periods]
-        P0 = vfilt[:, :, n_presample_periods]
+        if allout
+            # If we choose to discard presample periods, then we reassign `z0`
+            # and `P0` to be their values at the end of the presample/beginning
+            # of the main sample
+            kf.z0 = filt[:,     n_presample_periods]
+            kf.P0 = vfilt[:, :, n_presample_periods]
 
-        pred            = pred[:,     mainsample_periods]
-        vpred           = vpred[:, :, mainsample_periods]
-        filt            = filt[:,     mainsample_periods]
-        vfilt           = vfilt[:, :, mainsample_periods]
-        yprederror      = yprederror[:,  mainsample_periods]
-        ystdprederror   = ystdprederror[:, mainsample_periods]
-        # end
+            kf.pred            = pred[:,     mainsample_periods]
+            kf.vpred           = vpred[:, :, mainsample_periods]
+            kf.filt            = filt[:,     mainsample_periods]
+            kf.vfilt           = vfilt[:, :, mainsample_periods]
+            kf.yprederror      = yprederror[:,  mainsample_periods]
+            kf.ystdprederror   = ystdprederror[:, mainsample_periods]
+        end
     end
 
-    log_likelihood = sum(marginal_loglh)
-
-    # if allout
-    rmse = sqrt.(mean((yprederror.^2), 2))'
-    rmsd = sqrt.(mean((ystdprederror.^2), 2))'
-
-    return log_likelihood, z, P, pred, vpred, filt, vfilt, yprederror, ystdprederror,
-    rmse, rmsd, z0, P0, marginal_loglh
-    # else
-        # return log_likelihood, z, P
-    # end
+    return kf
 end
