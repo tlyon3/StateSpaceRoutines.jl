@@ -207,20 +207,7 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
     z0::Vector{S} = Vector{S}(), P0::Matrix{S} = Matrix{S}(0,0),
     allout::Bool = true, n_presample_periods::Int = 0)
 
-    results = Kalman_Out(0.0::Float64,
-    Array(Float64, 1),
-    Array(Float64, 2),
-    Array(Float64, 2),
-    Array(Float64, 3),
-    Array(Float64, 2),
-    Array(Float64, 3),
-    Array(Float64, 2),
-    Array(Float64, 2),
-    Array(Float64, 2),
-    Array(Float64, 2),
-    Array(Float64, 1),
-    Array(Float64, 2),
-    Array(Float64, 1))
+
     # Dimensions
     T  = size(data, 2) # number of periods of data
     Nz = size(TTT,  1) # number of states
@@ -334,7 +321,7 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
     rmse = sqrt.(mean((yprederror.^2), 2))'
     rmsd = sqrt.(mean((ystdprederror.^2), 2))'
 
-    results.log_likelihood = log_likelihood
+    log_likelihood = log_likelihood
     return log_likelihood, z, P, pred, vpred, filt, vfilt, yprederror, ystdprederror,
     rmse, rmsd, z0, P0, marginal_loglh
     # else
