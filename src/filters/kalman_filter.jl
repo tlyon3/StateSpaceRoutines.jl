@@ -1,4 +1,4 @@
-#=
+#= #
 This code is loosely based on a routine originally copyright Federal Reserve Bank of Atlanta
 and written by Iskander Karibzhanov.
 =#
@@ -16,8 +16,6 @@ mutable struct Kalman_Out
     P0              ::Array{Float64, 2}
     marginal_loglh  ::Array{Float64, 1}
 end
-
-# TODO: Add methods to compute log_likelihood, rmse, and rmsd
 
 # These can all be computed from other values
 # rmse            ::Array{Float64, 2}
@@ -154,22 +152,38 @@ function kalman_filter{S<:AbstractFloat}(regime_indices::Vector{Range{Int64}},
     @assert last(regime_indices[end]) == T
 
     # Initialize outputs
-    z = z0
-    P = P0
-    log_likelihood = zero(S)
     if allout
-        pred  = zeros(S, Nz, T - n_presample_periods)
-        vpred = zeros(S, Nz, Nz, T - n_presample_periods)
-        filt  = zeros(S, Nz, T - n_presample_periods)
-        vfilt = zeros(S, Nz, Nz, T - n_presample_periods)
-        yprederror    = zeros(S, Ny, T - n_presample_periods)
-        ystdprederror = zeros(S, Ny, T - n_presample_periods)
-        rmse  = zeros(S, 1, Ny)
-        rmsd  = zeros(S, 1, Ny)
-        marginal_loglh = zeros(T - n_presample_periods)
+        out_kf = Kalman_Out(
+            z0,                                          # z
+            P0,                                          # P
+            zeros(S, Nz, T - n_presample_periods),      # pred
+            zeros(S, Nz, Nz, T - n_presample_periods),  # vpred
+            zeros(S, Nz, T - n_presample_periods),      # filt
+            zeros(S, Nz, Nz, T - n_presample_periods),  # vfilt
+            zeros(S, Ny, T - n_presample_periods),      # yprederror
+            zeros(S, Ny, T - n_presample_periods),      # ystdprederror
+            z,                                          # z0
+            P,                                          # P0
+            zeros(T - n_presample_periods)              # marginal_loglh
+        )
+    else
+        out_kf = Kalman_Out(
+            z0,                             # z
+            P0,                             # P
+            Array{Float64}(0, 0),           # pred
+            Array{Float64}(0, 0, 0),        # vpred
+            Array{Float64}(0, 0),           # filt
+            Array{Float64}(0, 0, 0),        # vfilt
+            Array{Float64}(0, 0),           # yprederror
+            Array{Float64}(0, 0),           # ystdprederror
+            z0,                             # z0
+            P0,                             # P0
+            zeros(T - n_presample_periods)  # marginal_loglh
+        )
     end
 
     # Iterate through regimes
+    new_kf = out_kf
     for i = 1:length(regime_indices)
         regime_data = data[:, regime_indices[i]]
         if i == 1
@@ -181,10 +195,11 @@ function kalman_filter{S<:AbstractFloat}(regime_indices::Vector{Range{Int64}},
         end
 
         if allout
-            L, z, P, pred[:,ts], vpred[:,:,ts], filt[:,ts], vfilt[:,:,ts],
-            yprederror[:,ts], ystdprederror[:,ts], _, _, z0_, P0_, marginal_loglh[ts] =
-                kalman_filter(regime_data, TTTs[i], RRRs[i], CCCs[i], QQs[i], ZZs[i], DDs[i], EEs[i], z, P;
-                              allout = true, n_presample_periods = T0)
+            # TODO: need to use the previous `z` and `p` here...
+            new_kf = kalman_filter(regime_data, TTTs[i], RRRs[i], CCCs[i],
+                                    QQs[i], ZZs[i], DDs[i], EEs[i],
+                                    new_kf.z, new_kf.P; allout = true,
+                                    n_presample_periods = T0)
 
             # If `n_presample_periods > 0`, then `z0_` and `P0_` are returned as
             # the filtered values at the end of the presample/beginning of the
@@ -193,24 +208,20 @@ function kalman_filter{S<:AbstractFloat}(regime_indices::Vector{Range{Int64}},
             # in the first regime, we want to reassign `z0` and `P0`
             # accordingly.
             if i == 1
-                z0, P0 = z0_, P0_
+                out_kf.z0, out_kf.P0 = new_kf.z0_, new_kf.P0_
             end
         else
-            L, z, P = kalman_filter(regime_data, TTTs[i], RRRs[i], CCCs[i], QQs[i], ZZs[i], DDs[i], EEs[i], z, P,
-                                    allout = false, n_presample_periods = T0)
+            # TODO: need to use the previous `z` and `p` here...
+            new_kf = kalman_filter(regime_data, TTTs[i], RRRs[i], CCCs[i],
+                                    QQs[i], ZZs[i], DDs[i], EEs[i],
+                                    new_kf.z, new_kf.P; allout = false,
+                                    n_presample_periods = T0)
         end
-        log_likelihood += L
+        # TODO: This gets summed....can't compute after??????
+        log_likelihood += log_likelihood(new_kf)
     end
 
-    # if allout
-    rmse = sqrt.(mean((yprederror.^2)', 1))
-    rmsd = sqrt.(mean((ystdprederror.^2)', 1))
-
-    return log_likelihood, z, P, pred, vpred, filt, vfilt, yprederror, ystdprederror, rmse, rmsd, z0, P0,
-    marginal_loglh
-    # else
-        # return log_likelihood, z, P
-    # end
+    return out_kf
 end
 
 function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
@@ -347,3 +358,27 @@ function kalman_filter{S<:AbstractFloat}(data::Matrix{S},
 
     return kf
 end
+
+function log_likelihood(kf::Kalman_Out)
+    return sum(kf.marginal_loglh)
+end
+
+# function log_likelihood(marginal_loglh::Array{Float64, 1})
+#     return sum(marginal_loglh)
+# end
+
+function rmse(kf::Kalman_Out)
+    return sqrt.(mean((kf.yprederror.^2), 2))'
+end
+
+# function rmse(yprederror::Array{Float64, 2})
+#     return sqrt.(mean((yprederror.^2), 2))'
+# end
+
+function rmsd(kf::Kalman_Out)
+    return sqrt.(mean((kf.ystdprederror.^2), 2))'
+end
+
+# function rmsd(ystdprederror::Kalman_Out)
+#     return sqrt.(mean((ystdprederror.^2), 2))'
+# end

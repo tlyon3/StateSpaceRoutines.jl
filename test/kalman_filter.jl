@@ -11,18 +11,21 @@ close(h5)
 out = kalman_filter(data, TTT, RRR, CCC, QQ, ZZ, DD, EE, z0, P0)
 
 h5open("$path/reference/kalman_filter_out.h5", "r") do h5
-    @test read(h5, "log_likelihood") ≈ out[1]
-    @test read(h5, "pred")           ≈ out[4]
-    @test read(h5, "vpred")          ≈ out[5]
-    @test read(h5, "filt")           ≈ out[6]
-    @test read(h5, "vfilt")          ≈ out[7]
-    @test read(h5, "yprederror")     ≈ out[8]
-    @test read(h5, "ystdprederror")  ≈ out[9]
-    @test read(h5, "rmse")           ≈ out[10]
-    @test read(h5, "rmsd")           ≈ out[11]
-    @test z0                         ≈ out[12]
-    @test P0                         ≈ out[13]
-    @test read(h5, "marginal_loglh") ≈ out[14]
+    # @test read(h5, "log_likelihood") ≈ out[1] # TODO: compute this after
+    @test read(h5, "log_likelihood") ≈ log_likelihood(out)
+    @test read(h5, "pred")           ≈ out.pred
+    @test read(h5, "vpred")          ≈ out.vpred
+    @test read(h5, "filt")           ≈ out.filt
+    @test read(h5, "vfilt")          ≈ out.vfilt
+    @test read(h5, "yprederror")     ≈ out.yprederror
+    @test read(h5, "ystdprederror")  ≈ out.ystdprederror
+    # @test read(h5, "rmse")           ≈ out[10] # TODO: compute this after
+    @test read(h5, "rmse")           ≈ rmse(out)
+    # @test read(h5, "rmsd")           ≈ out[11] # TODO: compute this after
+    @test read(h5, "rmsd")           ≈ rmsd(out)
+    @test z0                         ≈ out.z0
+    @test P0                         ≈ out.P0
+    @test read(h5, "marginal_loglh") ≈ out.marginal_loglh
 end
 
 # Method with initial conditions omitted
@@ -31,18 +34,21 @@ out = kalman_filter(data, TTT, RRR, CCC, QQ, ZZ, DD, EE)
 # Pend, vpred, and vfilt matrix entries are especially large, averaging 1e5, so
 # we allow greater ϵ
 h5open("$path/reference/kalman_filter_out.h5", "r") do h5
-    @test read(h5, "log_likelihood") ≈ out[1]
-    @test read(h5, "pred")           ≈ out[4]
-    @test read(h5, "vpred")          ≈ out[5]
-    @test read(h5, "filt")           ≈ out[6]
-    @test read(h5, "vfilt")          ≈ out[7]
-    @test read(h5, "yprederror")     ≈ out[8]
-    @test read(h5, "ystdprederror")  ≈ out[9]
-    @test read(h5, "rmse")           ≈ out[10]
-    @test read(h5, "rmsd")           ≈ out[11]
-    @test z0                         ≈ out[12]
-    @test P0                         ≈ out[13]
-    @test read(h5, "marginal_loglh") ≈ out[14]
+    # @test read(h5, "log_likelihood") ≈ out[1] # TODO: compute this after
+    @test read(h5, "log_likelihood") ≈ log_likelihood(out)
+    @test read(h5, "pred")           ≈ out.pred
+    @test read(h5, "vpred")          ≈ out.vpred
+    @test read(h5, "filt")           ≈ out.filt
+    @test read(h5, "vfilt")          ≈ out.vfilt
+    @test read(h5, "yprederror")     ≈ out.yprederror
+    @test read(h5, "ystdprederror")  ≈ out.ystdprederror
+    # @test read(h5, "rmse")           ≈ out[10] # TODO: compute this after
+    @test read(h5, "rmse")           ≈ rmse(out)
+    # @test read(h5, "rmsd")           ≈ out[11] # TODO: compute this after
+    @test read(h5, "rmsd")           ≈ rmsd(out)
+    @test z0                         ≈ out.z0
+    @test P0                         ≈ out.P0
+    @test read(h5, "marginal_loglh") ≈ out.marginal_loglh
 end
 
 

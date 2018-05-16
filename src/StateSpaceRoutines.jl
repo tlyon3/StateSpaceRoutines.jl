@@ -11,6 +11,9 @@ module StateSpaceRoutines
 
         # filters/kalman_filter.jl
         kalman_filter,
+        log_likelihood,
+        rmse,
+        rmsd,
 
         # filters/tempered_particle_filter
         tempered_particle_filter, initialize_state_draws, correction_selection!,
